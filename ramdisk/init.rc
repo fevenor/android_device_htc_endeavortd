@@ -1,0 +1,227 @@
+import /init.${ro.hardware}.rc
+
+on early-init
+    start ueventd
+
+on init
+    export PATH /sbin:/system/sbin:/system/bin
+    export ANDROID_ROOT /system
+    export ANDROID_DATA /data
+    export EXTERNAL_STORAGE /sdcard
+
+    symlink /system/etc /etc
+
+    mkdir /sdcard
+    mkdir /system
+    mkdir /data
+    mkdir /data/data
+    mkdir /data/property
+    mkdir /cache
+    mkdir /devlog
+    mkdir /mtdcache
+    mkdir /internal_sdcard
+    mount /tmp /tmp tmpfs
+
+#+SSD_RIL: from Qualcomm socket path
+    mkdir /dev/socket/qmux_radio 0770 radio radio
+    mkdir /dev/socket/qmux_audio 0770 audio audio
+    mkdir /dev/socket/qmux_bluetooth 0770 bluetooth bluetooth
+    mkdir /dev/socket/qmux_gps 0770 gps gps
+#-SSD_RIL: from Qualcomm socket path
+
+    chown root shell /tmp
+    chmod 0775 /tmp
+
+
+
+
+on boot
+
+    write /sys/module/cpu_tegra3/parameters/auto_hotplug 1
+    write /sys/kernel/debug/tegra_hotplug/max_cpus 2
+    write /sys/kernel/debug/tegra_hotplug/min_cpus 2
+    write /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq 1700000
+    write /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq 1700000
+    write /sys/module/cpu_tegra/parameters/cpu_user_cap 475000
+
+    ifup lo
+    hostname localhost
+    domainname localdomain
+
+    class_start default
+
+service ueventd /sbin/ueventd
+    critical
+
+service choice_fn /sbin/choice_fn
+    oneshot
+
+service mfgsrv /sbin/mfgsrv -i -t /dev/ttyS0
+    disabled
+
+service recovery /sbin/recovery
+    disabled
+
+service adbd /sbin/adbd recovery
+    disabled
+
+service htcbatt /sbin/htcbatt
+    oneshot
+
+service offmode_charging /sbin/offmode_charging
+    disabled
+    oneshot
+
+service detect_key /sbin/detect_key
+    disabled
+    oneshot
+
+# Always start adbd on userdebug and eng builds
+on property:ro.debuggable=1
+    write /sys/class/android_usb/android0/enable 0
+    write /sys/class/android_usb/android0/idVendor 18D1
+    write /sys/class/android_usb/android0/idProduct D001
+    write /sys/class/android_usb/android0/functions adb
+    write /sys/class/android_usb/android0/enable 1
+    write /sys/class/android_usb/android0/iManufacturer $ro.product.manufacturer
+    write /sys/class/android_usb/android0/iProduct $ro.product.model
+    write /sys/class/android_usb/android0/iSerial $ro.serialno
+    start adbd
+
+# workaround:for Radio team to debugging
+on property:ro.debuggable=0
+    write /sys/class/android_usb/android0/enable 0
+    write /sys/class/android_usb/android0/idVendor 18D1
+    write /sys/class/android_usb/android0/idProduct D001
+    write /sys/class/android_usb/android0/functions adb
+    write /sys/class/android_usb/android0/enable 1
+    write /sys/class/android_usb/android0/iManufacturer $ro.product.manufacturer
+    write /sys/class/android_usb/android0/iProduct $ro.product.model
+    write /sys/class/android_usb/android0/iSerial $ro.serialno
+    start adbd
+
+# Restart adbd so it can run as root
+on property:service.adb.root=1
+    write /sys/class/android_usb/android0/enable 0
+    restart adbd
+    write /sys/class/android_usb/android0/enable 1
+
+on property:persist.service.zcharge.enable=1
+# backlight
+    write /sys/class/backlight/tegra-pwm-bl/brightness 0
+
+# Power management settings
+    write /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor userspace
+    write /sys/module/cpu_tegra3/parameters/no_lp 0
+    write /sys/devices/system/cpu/cpu1/online 0
+    write /sys/devices/system/cpu/cpu2/online 0
+    write /sys/devices/system/cpu/cpu3/online 0
+    write /sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed 340000
+    write /sys/devices/system/cpu/cpufreq/interactive/boost_factor 2
+    write /sys/devices/system/cpu/cpufreq/interactive/sustain_load 80
+    write /sys/module/cpu_tegra3/parameters/auto_hotplug 0
+    write /sys/module/cpuidle/parameters/lp2_in_idle 1
+
+#For Calibration
+service poweron_modem /system/bin/poweron_modem_hboot.sh /data/modem_work/
+#service poweron_modem /system/bin/sh /system/bin/poweron_modem_hboot.sh /data/modem_work/
+#    class late_start
+    user root
+    group root
+    oneshot
+#    start gsm0710mux
+    disabled
+
+service gsm0710mux /system/bin/gsm0710muxd -s /dev/ttyACM0 -v 5 -n 8 -m basic
+#    class late_start
+    #user radio
+    #group radio cache inet misc
+#    oneshot
+    disabled
+
+service nvm-server /system/bin/nvm_server
+    socket nvm-ctl stream 660 radio radio
+    #user radio
+    #group radio
+    oneshot
+    disabled
+
+service init-acmx0 /system/bin/mknod /dev/ttyACMX0 c 66 0
+    oneshot
+    disabled
+
+service init-acmx2 /system/bin/chmod 777 /dev/ttyACMX0
+    oneshot
+    disabled
+
+#service modem-daemon /system/bin/modemd
+#    disabled
+
+service atpipe_plain /system/bin/atpipe_plain
+    disabled
+
+#start log utility
+service klog /system/bin/sh /system/xbin/klog.sh
+    user root
+    group root
+    disabled
+
+service rlog /system/bin/sh /system/xbin/rlog.sh
+    user root
+    group root
+    disabled
+
+service dlog /system/bin/sh /system/xbin/dlog.sh
+    user root
+    group root
+    disabled
+
+service rfaudio /system/bin/rfaudio
+	oneshot
+	group system audio radio
+	disabled
+
+#for power test
+service power_test /sbin/power_test
+disabled
+oneshot
+
+on property:persist.service.calib.enable=1
+    mount ext4 /dev/block/platform/sdhci-tegra.3/by-name/UDA /data wait noatime
+    mount ext4 /dev/block/platform/sdhci-tegra.3/by-name/CAC /cache wait noatime
+    mount ext4 /dev/block/platform/sdhci-tegra.3/by-name/APP /system wait ro
+    mkdir /rca 0775 radio radio
+    mount ext4 /dev/block/platform/sdhci-tegra.3/by-name/RCA /rca wait noatime
+    chmod 0660 /rca
+    mkdir /rfs 0775 radio radio
+    mount ext4 /dev/block/platform/sdhci-tegra.3/by-name/RFS /rfs wait noatime
+    chmod 0660 /rfs
+    chmod 0660 /rca/calib.nvm
+    start klog
+    start rlog
+    start dlog
+    start nvm-server
+    start init-acmx0
+    start init-acmx2
+    start poweron_modem
+    start rfaudio
+
+service recy_klog /system/bin/sh /system/xbin/recy_klog.sh
+    user root
+    group root
+    disabled
+
+service recy_lastkmsg /system/bin/sh /system/xbin/recy_lastkmsg.sh
+    user root
+    group root
+    disabled
+
+on property:persist.service.recy_log.enable=1
+# mount internal sdcard partition
+    mount vfat /dev/block/platform/sdhci-tegra.3/by-name/ISD /sdcard wait noatime
+
+on property:mount_system=1
+    mount ext4 /dev/block/platform/sdhci-tegra.3/by-name/APP /system wait ro
+
+on property:shell_ready=1
+    exec /system/bin/sh /init.qcom.firmware_links.sh /firmware/mdm/image /firmware "*.mbn *.img"
