@@ -20,20 +20,10 @@
 #
 
 # Inherit from those products. Most specific first.
-$(call inherit-product, device/htc/endeavoru/endeavoru.mk)
+$(call inherit-product, device/htc/endeavortd/endeavortd.mk)
 # This is where we'd set a backup provider if we had one
 #$(call inherit-product, device/sample/products/backup_overlay.mk)
 $(call inherit-product, $(SRC_TARGET_DIR)/product/full_base_telephony.mk)
-
-LOCAL_PATH := device/htc/endeavortd
-ifeq ($(TARGET_PREBUILT_KERNEL),)
-	LOCAL_KERNEL := $(LOCAL_PATH)/kernel
-else
-	LOCAL_KERNEL := $(TARGET_PREBUILT_KERNEL)
-endif
-
-PRODUCT_COPY_FILES += \
-    $(LOCAL_KERNEL):kernel
 
 # Discard inherited values and use our own instead.
 PRODUCT_NAME := full_endeavortd
