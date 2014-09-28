@@ -1,0 +1,6 @@
+#
+# system.prop for endeavortd
+#
+ro.adb.secure=0
+ro.secure=0
+ro.debuggable=1
